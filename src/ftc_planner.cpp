@@ -24,6 +24,7 @@ namespace ftc_local_planner {
 
         global_point_pub = private_nh.advertise<geometry_msgs::PoseStamped>("global_point", 1);
         global_plan_pub = private_nh.advertise<nav_msgs::Path>("global_plan", 1, true);
+        pid_status_pub = private_nh.advertise<FTCPlannerPIDStatus>("pid_status", 1);
 
         costmap = costmap_ros;
         tf_buffer = tf;
@@ -390,11 +391,23 @@ namespace ftc_local_planner {
         last_lon_error = lon_error;
         last_angle_error = angle_error;
 
+        double cor_lon_p = 0;
+        double cor_lon_i = 0;
+        double cor_lon_d = 0;
+        double cor_ang_p = 0;
+        double cor_ang_i = 0;
+        double cor_ang_d = 0;
+        double cor_lat_p = 0;
+        double cor_lat_i = 0;
+        double cor_lat_d = 0;
 
         // allow linear movement only if in following state
 
         if (current_state == FOLLOWING) {
-            double lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+            cor_lon_p = lon_error * config.kp_lon;
+            cor_lon_i = i_lon_error * config.ki_lon;
+            cor_lon_d = d_lon * config.kd_lon;
+            double lin_speed = cor_lon_p + cor_lon_i + cor_lon_d;
             if (lin_speed < 0 && config.forward_only) {
                 lin_speed = 0;
             } else {
@@ -414,9 +427,14 @@ namespace ftc_local_planner {
         }
 
         if (current_state == FOLLOWING) {
-
-            double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang +
-                               lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat;
+            cor_ang_p = angle_error * config.kp_ang;
+            cor_ang_i = i_angle_error * config.ki_ang;
+            cor_ang_d = d_angle * config.kd_ang;
+            cor_lat_p = lat_error * config.kp_lat + i_lat_error;
+            cor_lat_i = i_lat_error * config.ki_lat;
+            cor_lat_d = d_lat * config.kd_lat;
+            double ang_speed = cor_ang_p + cor_ang_i + cor_ang_d +
+                               cor_lat_p + cor_lat_i + cor_lat_d;
 
 
             if (ang_speed > config.max_cmd_vel_ang) {
@@ -427,7 +445,10 @@ namespace ftc_local_planner {
 
             cmd_vel.twist.angular.z = ang_speed;
         } else {
-            double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang;
+            cor_ang_p = angle_error * config.kp_ang;
+            cor_ang_i = i_angle_error * config.ki_ang;
+            cor_ang_d = d_angle * config.kd_ang;
+            double ang_speed = cor_ang_p + cor_ang_i + cor_ang_d;
 
             if (ang_speed > config.max_cmd_vel_ang) {
                 ang_speed = config.max_cmd_vel_ang;
@@ -435,6 +456,28 @@ namespace ftc_local_planner {
                 ang_speed = -config.max_cmd_vel_ang;
             }
             cmd_vel.twist.angular.z = ang_speed;
+        }
+        if (config.publish_pid_status) {
+            FTCPlannerPIDStatus pid_status_msg;
+            pid_status_msg.lat_error = lat_error;
+            pid_status_msg.lon_error = lon_error;
+            pid_status_msg.angle_error = angle_error;
+            pid_status_msg.i_lat_error = i_lat_error;
+            pid_status_msg.i_lon_error = i_lon_error;
+            pid_status_msg.i_angle_error = i_angle_error;
+            pid_status_msg.d_lat_error = d_lat;
+            pid_status_msg.d_lon_error = d_lon;
+            pid_status_msg.d_angle_error = d_angle;
+            pid_status_msg.cor_lat_p = cor_lat_p;
+            pid_status_msg.cor_lat_i = cor_lat_i;
+            pid_status_msg.cor_lat_d = cor_lat_d;
+            pid_status_msg.cor_angle_p = cor_ang_p;
+            pid_status_msg.cor_angle_i = cor_ang_i;
+            pid_status_msg.cor_angle_d = cor_ang_d;
+            pid_status_msg.cor_lon_p = cor_lon_p;
+            pid_status_msg.cor_lon_i = cor_lon_i;
+            pid_status_msg.cor_lon_d = cor_lon_d;
+            pid_status_pub.publish(pid_status_msg);
         }
     }
 

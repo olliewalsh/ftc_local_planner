@@ -11,6 +11,7 @@
 #include <tf/transform_listener.h>
 #include <dynamic_reconfigure/server.h>
 #include <ftc_local_planner/FTCPlannerConfig.h>
+#include <ftc_local_planner/FTCPlannerPIDStatus.h>
 #include <nav_core/base_local_planner.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -53,6 +54,7 @@ class FTCPlanner : public mbf_costmap_core::CostmapController {
         ros::Publisher global_point_pub;
         ros::Publisher global_plan_pub;
         ros::Publisher progress_pub;
+        ros::Publisher pid_status_pub;
 
         ftc_local_planner::FTCPlannerConfig config;
 
