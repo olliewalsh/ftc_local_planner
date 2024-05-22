@@ -12,11 +12,6 @@ PLUGINLIB_EXPORT_CLASS(ftc_local_planner::FTCPlanner, mbf_costmap_core::CostmapC
 
 namespace ftc_local_planner
 {
-
-    FTCPlanner::FTCPlanner()
-    {
-    }
-
     void FTCPlanner::initialize(std::string name, tf2_ros::Buffer *tf, costmap_2d::Costmap2DROS *costmap_ros)
     {
         ros::NodeHandle private_nh("~/" + name);
@@ -37,8 +32,6 @@ namespace ftc_local_planner
         dynamic_reconfigure::Server<FTCPlannerConfig>::CallbackType cb = boost::bind(&FTCPlanner::reconfigureCB, this,
                                                                                      _1, _2);
         reconfig_server->setCallback(cb);
-
-        current_state = PRE_ROTATE;
 
         // PID Debugging topic
         if (config.debug_pid)
@@ -70,8 +63,7 @@ namespace ftc_local_planner
 
     bool FTCPlanner::setPlan(const std::vector<geometry_msgs::PoseStamped> &plan)
     {
-        current_state = PRE_ROTATE;
-        state_entered_time = ros::Time::now();
+        set_planner_state(PRE_ROTATE);
         is_crashed = false;
 
         global_plan = plan;
@@ -102,8 +94,7 @@ namespace ftc_local_planner
         else
         {
             ROS_WARN_STREAM("FTCLocalPlannerROS: Global plan was too short. Need a minimum of 3 poses - Cancelling.");
-            current_state = FINISHED;
-            state_entered_time = ros::Time::now();
+            set_planner_state(FINISHED);
         }
         global_plan_pub.publish(path);
 
@@ -171,13 +162,7 @@ namespace ftc_local_planner
         // First, we update the control point if needed. This is needed since we need the local_control_point to calculate the next state.
         update_control_point(dt);
         // Then, update the planner state.
-        auto new_planner_state = update_planner_state();
-        if (new_planner_state != current_state)
-        {
-            ROS_INFO_STREAM("FTCLocalPlannerROS: Switching to state " << new_planner_state);
-            state_entered_time = ros::Time::now();
-            current_state = new_planner_state;
-        }
+        update_planner_state();
 
         if (checkCollision(config.obstacle_lookahead))
         {
@@ -209,12 +194,23 @@ namespace ftc_local_planner
     bool FTCPlanner::cancel()
     {
         ROS_WARN_STREAM("FTCLocalPlannerROS: FTC planner was cancelled.");
-        current_state = FINISHED;
-        state_entered_time = ros::Time::now();
+        set_planner_state(FINISHED);
         return true;
     }
 
-    FTCPlanner::PlannerState FTCPlanner::update_planner_state()
+    void FTCPlanner::set_planner_state(PlannerState s) {
+        auto last_state = current_state;
+        current_state_ = s;
+        if( last_state != current_state) {
+            ROS_INFO_STREAM("FTCLocalPlannerROS: Switching to state " << current_state);
+            state_entered_time = ros::Time::now();
+            // Reset oscillation detection
+            failure_detector_.clear();
+            failure_detector_.setBufferLength(std::round(config.oscillation_recovery_min_duration * 10));
+        }
+    };
+
+    void FTCPlanner::update_planner_state()
     {
         switch (current_state)
         {
@@ -224,12 +220,14 @@ namespace ftc_local_planner
             {
                 ROS_ERROR_STREAM("FTCLocalPlannerROS: Error reaching goal. config.goal_timeout (" << config.goal_timeout << ") reached - Timeout in PRE_ROTATE phase.");
                 is_crashed = true;
-                return FINISHED;
+                set_planner_state(FINISHED);
+                return;
             }
             if (abs(angle_error) * (180.0 / M_PI) < config.max_goal_angle_error)
             {
                 ROS_INFO_STREAM("FTCLocalPlannerROS: PRE_ROTATE finished. Starting following");
-                return FOLLOWING;
+                set_planner_state(FOLLOWING);
+                return;
             }
         }
         break;
@@ -241,14 +239,16 @@ namespace ftc_local_planner
             {
                 ROS_ERROR_STREAM("FTCLocalPlannerROS: Robot is far away from global plan. distance (" << distance << ") > config.max_follow_distance (" << config.max_follow_distance << ") It probably has crashed.");
                 is_crashed = true;
-                return FINISHED;
+                set_planner_state(FINISHED);
+                return;
             }
 
             // check if we're done following
             if (current_index == global_plan.size() - 2)
             {
                 ROS_INFO_STREAM("FTCLocalPlannerROS: switching planner to position mode");
-                return WAITING_FOR_GOAL_APPROACH;
+                set_planner_state(WAITING_FOR_GOAL_APPROACH);
+                return;
             }
         }
         break;
@@ -258,12 +258,14 @@ namespace ftc_local_planner
             if (time_in_current_state() > config.goal_timeout)
             {
                 ROS_WARN_STREAM("FTCLocalPlannerROS: Could not reach goal position. config.goal_timeout (" << config.goal_timeout << ") reached - Attempting final rotation anyways.");
-                return POST_ROTATE;
+                set_planner_state(POST_ROTATE);
+                return;
             }
             if (distance < config.max_goal_distance_error)
             {
                 ROS_INFO_STREAM("FTCLocalPlannerROS: Reached goal position.");
-                return POST_ROTATE;
+                set_planner_state(POST_ROTATE);
+                return;
             }
         }
         break;
@@ -272,12 +274,14 @@ namespace ftc_local_planner
             if (time_in_current_state() > config.goal_timeout)
             {
                 ROS_WARN_STREAM("FTCLocalPlannerROS: Could not reach goal rotation. config.goal_timeout (" << config.goal_timeout << ") reached");
-                return FINISHED;
+                set_planner_state(FINISHED);
+                return;
             }
             if (abs(angle_error) * (180.0 / M_PI) < config.max_goal_angle_error)
             {
                 ROS_INFO_STREAM("FTCLocalPlannerROS: POST_ROTATE finished.");
-                return FINISHED;
+                set_planner_state(FINISHED);
+                return;
             }
         }
         break;
@@ -285,10 +289,12 @@ namespace ftc_local_planner
         {
             // Nothing to do here
         }
+        case INIT:
+        {
+            // Nothing to do here
+        }
         break;
         }
-
-        return current_state;
     }
 
     void FTCPlanner::update_control_point(double dt)
@@ -404,6 +410,7 @@ namespace ftc_local_planner
         case WAITING_FOR_GOAL_APPROACH:
             break;
         case FINISHED:
+        case INIT:
             break;
         }
 
@@ -468,9 +475,8 @@ namespace ftc_local_planner
         last_lon_error = lon_error;
         last_angle_error = angle_error;
 
-        // allow linear movement only if in following state
-
-        if (current_state == FOLLOWING)
+        // Only allow linear movement while FOLLOWING or WAITING_FOR_GOAL_APPROACH
+        if (current_state == FOLLOWING || current_state == WAITING_FOR_GOAL_APPROACH)
         {
             double lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
             if (lin_speed < 0 && config.forward_only)
@@ -500,43 +506,29 @@ namespace ftc_local_planner
             cmd_vel.twist.linear.x = 0.0;
         }
 
-        if (current_state == FOLLOWING)
-        {
-
-            double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang +
-                               lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat;
-
-            if (ang_speed > config.max_cmd_vel_ang)
-            {
-                ang_speed = config.max_cmd_vel_ang;
-            }
-            else if (ang_speed < -config.max_cmd_vel_ang)
-            {
-                ang_speed = -config.max_cmd_vel_ang;
-            }
-
-            cmd_vel.twist.angular.z = ang_speed;
+        double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang;
+        // Only apply lat PID while FOLLOWING
+        if (current_state == FOLLOWING) {
+            ang_speed += lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat;
         }
-        else
+
+        if (ang_speed > config.max_cmd_vel_ang)
         {
-            double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang;
-            if (ang_speed > config.max_cmd_vel_ang)
-            {
-                ang_speed = config.max_cmd_vel_ang;
-            }
-            else if (ang_speed < -config.max_cmd_vel_ang)
-            {
-                ang_speed = -config.max_cmd_vel_ang;
-            }
+            ang_speed = config.max_cmd_vel_ang;
+        }
+        else if (ang_speed < -config.max_cmd_vel_ang)
+        {
+            ang_speed = -config.max_cmd_vel_ang;
+        }
 
-            cmd_vel.twist.angular.z = ang_speed;
+        cmd_vel.twist.angular.z = ang_speed;
 
+        if (current_state == PRE_ROTATE || current_state == POST_ROTATE) {
             // check if robot oscillates
             bool is_oscillating = checkOscillation(cmd_vel);
             if (is_oscillating)
             {
-                ang_speed = config.max_cmd_vel_ang;
-                cmd_vel.twist.angular.z = ang_speed;
+                cmd_vel.twist.angular.z = 0;
             }
         }
 
