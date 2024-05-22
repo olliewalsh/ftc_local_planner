@@ -35,13 +35,15 @@ namespace ftc_local_planner
             FOLLOWING,
             WAITING_FOR_GOAL_APPROACH,
             POST_ROTATE,
-            FINISHED
+            FINISHED,
+            INIT = 255
         };
 
     private:
         ros::ServiceServer progress_server;
         // State tracking
-        PlannerState current_state;
+        const PlannerState& current_state;
+        PlannerState current_state_;
         ros::Time state_entered_time;
 
         bool is_crashed;
@@ -96,7 +98,8 @@ namespace ftc_local_planner
         bool oscillation_warning_ = false;
 
         double distanceLookahead();
-        PlannerState update_planner_state();
+        void set_planner_state(PlannerState s);
+        void update_planner_state();
         void update_control_point(double dt);
         void calculate_velocity_commands(double dt, geometry_msgs::TwistStamped &cmd_vel);
 
@@ -135,7 +138,7 @@ namespace ftc_local_planner
         void reconfigureCB(FTCPlannerConfig &config, uint32_t level);
 
     public:
-        FTCPlanner();
+        FTCPlanner() : current_state_(INIT), current_state(current_state_) {};
 
         bool getProgress(ftc_local_planner::PlannerGetProgressRequest &req, ftc_local_planner::PlannerGetProgressResponse &res);
 
