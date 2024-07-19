@@ -95,6 +95,7 @@ namespace ftc_local_planner
         {
             ROS_WARN_STREAM("FTCLocalPlannerROS: Global plan was too short. Need a minimum of 3 poses - Cancelling.");
             set_planner_state(FINISHED);
+            return true;
         }
         global_plan_pub.publish(path);
 
@@ -351,7 +352,7 @@ namespace ftc_local_planner
 
                 double pose_distance_angular = current_rot.angularDistance(next_rot);
 
-                if (pose_distance <= 0.0)
+                if (pose_distance <= 0.0 && std::abs(pose_distance_angular) <= 0.00001)
                 {
                     ROS_WARN_STREAM("FTCLocalPlannerROS: Skipping duplicate point in global plan.");
                     current_index++;
