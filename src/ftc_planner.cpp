@@ -79,6 +79,7 @@ namespace ftc_local_planner
         i_lon_error = 0.0;
         i_lat_error = 0.0;
         i_angle_error = 0.0;
+        lin_speed = 0.0;
 
         nav_msgs::Path path;
 
@@ -426,6 +427,7 @@ namespace ftc_local_planner
 
         lat_error = local_control_point.translation().y();
         lon_error = local_control_point.translation().x();
+        lon_error -= config.follow_distance;
         angle_error = local_control_point.rotation().eulerAngles(0, 1, 2).z();
     }
 
@@ -491,7 +493,12 @@ namespace ftc_local_planner
         // Only allow linear movement while FOLLOWING or WAITING_FOR_GOAL_APPROACH
         if (current_state == FOLLOWING || current_state == WAITING_FOR_GOAL_APPROACH)
         {
-            double lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+            if (config.lon_pid_speed_delta) {
+                lin_speed += lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+            }
+            else {
+                lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+            }
             if (lin_speed < 0 && config.forward_only)
             {
                 lin_speed = 0;
@@ -551,7 +558,6 @@ namespace ftc_local_planner
         if (config.debug_pid)
         {
             ftc_local_planner::PID debugPidMsg;
-            debugPidMsg.kp_lon_set = lon_error;
 
             // proportional
             debugPidMsg.kp_lat_set = lat_error * config.kp_lat;
