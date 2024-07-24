@@ -417,7 +417,7 @@ namespace ftc_local_planner
         tf2::doTransform(current_control_point, local_control_point, map_to_base);
 
         lat_error = local_control_point.translation().y();
-        lon_error = local_control_point.translation().x();
+        lon_error = local_control_point.translation().x() * config.follow_distance;
         angle_error = local_control_point.rotation().eulerAngles(0, 1, 2).z();
     }
 
