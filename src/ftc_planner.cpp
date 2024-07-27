@@ -360,6 +360,9 @@ namespace ftc_local_planner
 
                 //calculate max speed with acceleration from previous step (actually decel but going backwards)
                 max_speed = sqrt((max_speed * max_speed) + (2 * config.acceleration * distances[i]));
+                if(config.max_wheel_speed != 0 && config.wheel_distance_m != 0) {
+                    max_speed = std::min(max_speed, std::max(0.0, config.max_wheel_speed - 0.5*config.wheel_distance_m*rotations[i]));
+                }
                 if(max_speed > config.speed_fast)
                     max_speed = config.speed_fast;
                 if(speed < max_speed)
