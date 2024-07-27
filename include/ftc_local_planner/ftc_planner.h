@@ -98,6 +98,7 @@ namespace ftc_local_planner
         bool oscillation_warning_ = false;
 
         double distanceLookahead();
+        double velocityLookahead();
         void set_planner_state(PlannerState s);
         void update_planner_state();
         void update_control_point(double dt);

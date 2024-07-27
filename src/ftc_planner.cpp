@@ -55,7 +55,7 @@ namespace ftc_local_planner
         config = c;
 
         // just to be sure
-        current_movement_speed = config.speed_slow;
+        current_movement_speed = config.speed_fast;
 
         // set recovery behavior
         failure_detector_.setBufferLength(std::round(config.oscillation_recovery_min_duration * 10));
@@ -71,7 +71,7 @@ namespace ftc_local_planner
         current_progress = 0.0;
 
         last_time = ros::Time::now();
-        current_movement_speed = config.speed_slow;
+        current_movement_speed = config.speed_fast;
 
         lat_error = 0.0;
         lon_error = 0.0;
@@ -307,6 +307,69 @@ namespace ftc_local_planner
         }
     }
 
+    double FTCPlanner::velocityLookahead()
+    {
+        if (global_plan.size() < 2)
+        {
+            return 0;
+        }
+
+        //work out how many points look ahead we need to decelerate to 0 from current speed
+        double decelDist = (current_movement_speed * current_movement_speed) / (2.0 * config.acceleration);
+        double total_dist = 0.0;
+        std::vector<double> distances;
+        std::vector<double> rotations;
+        Eigen::Affine3d last_point = current_control_point;
+        Eigen::Quaternion<double> last_rot(current_control_point.linear());
+        uint32_t i = 0;
+        for (i = current_index + 1; i < global_plan.size(); i++)
+        {
+            Eigen::Affine3d next_point;
+            tf2::fromMsg(global_plan[i].pose, next_point);
+            double dist = abs((next_point.translation() - last_point.translation()).norm());
+            distances.push_back(dist);
+            Eigen::Quaternion<double> next_rot(next_point.linear());
+            rotations.push_back(abs(next_rot.angularDistance(last_rot)));
+            total_dist += dist;
+            last_point = next_point;
+            last_rot = next_rot;
+            if(total_dist >= decelDist)
+                break;
+        }
+
+        double max_speed = config.speed_fast;
+        if(i >= global_plan.size())
+        {
+            max_speed = 0.0; //if we are approaching end of the path finish with zero speed
+        }
+        if(distances.empty()) 
+        {
+            return 0;
+        }
+        else{
+            //now go back through the points to calculate max permissible speed
+            
+            for(int32_t i = distances.size()-1;i>=0;i--)
+            {
+                //calculate max speed to allow time for rotations
+                double angle = rotations[i] * (180.0 / M_PI);
+                double time_to_rotate = angle / config.speed_angular;
+                double speed = config.speed_fast;
+                if(time_to_rotate > 0.0)
+                    speed = distances[i]/time_to_rotate;
+
+                //calculate max speed with acceleration from previous step (actually decel but going backwards)
+                max_speed = sqrt((max_speed * max_speed) + (2 * config.acceleration * distances[i]));
+                if(max_speed > config.speed_fast)
+                    max_speed = config.speed_fast;
+                if(speed < max_speed)
+                    max_speed = speed;                 
+            }
+        }
+
+        return max_speed;
+    }
+
     void FTCPlanner::update_control_point(double dt)
     {
 
@@ -317,16 +380,24 @@ namespace ftc_local_planner
             break;
         case FOLLOWING:
         {
-            // Normal planner operation
-            double straight_dist = distanceLookahead();
-            double speed;
-            if (straight_dist >= config.speed_fast_threshold)
+            double speed = 0.0;
+            if(config.speed_slow > 0.0)
             {
-                speed = config.speed_fast;
+                // Normal planner operation
+                double straight_dist = distanceLookahead();
+                
+                if (straight_dist >= config.speed_fast_threshold)
+                {
+                    speed = config.speed_fast;
+                }
+                else
+                {
+                    speed = config.speed_slow;
+                }
             }
             else
             {
-                speed = config.speed_slow;
+                speed = velocityLookahead();
             }
 
             if (speed > current_movement_speed)
@@ -348,7 +419,7 @@ namespace ftc_local_planner
             double angle_to_move = dt * config.speed_angular * (M_PI / 180.0);
 
             Eigen::Affine3d nextPose, currentPose;
-            while (angle_to_move > 0 && distance_to_move > 0 && current_index < global_plan.size() - 2)
+            while ((angle_to_move > 0 || distance_to_move > 0) && current_index < global_plan.size() - 2)
             {
 
                 tf2::fromMsg(global_plan[current_index].pose, currentPose);
@@ -371,8 +442,8 @@ namespace ftc_local_planner
                 double remaining_distance_to_next_pose = pose_distance * (1.0 - current_progress);
                 double remaining_angular_distance_to_next_pose = pose_distance_angular * (1.0 - current_progress);
 
-                if (remaining_distance_to_next_pose < distance_to_move &&
-                    remaining_angular_distance_to_next_pose < angle_to_move)
+                if ((remaining_distance_to_next_pose == 0 || remaining_distance_to_next_pose < distance_to_move) &&
+                    (remaining_angular_distance_to_next_pose == 0 || remaining_angular_distance_to_next_pose < angle_to_move))
                 {
                     // we need to move further than the remaining distance_to_move. Skip to the next point and decrease distance_to_move.
                     current_progress = 0.0;
@@ -383,14 +454,16 @@ namespace ftc_local_planner
                 else
                 {
                     // we cannot reach the next point yet, so we update the percentage
-                    double current_progress_distance =
-                        (pose_distance * current_progress + distance_to_move) / pose_distance;
-                    double current_progress_angle =
-                        (pose_distance_angular * current_progress + angle_to_move) / pose_distance_angular;
+                    double current_progress_distance = 1.0;
+                    if (pose_distance != 0.0) 
+                        current_progress_distance = (pose_distance * current_progress + distance_to_move) / pose_distance;
+                    double current_progress_angle = 1.0;
+                    if (pose_distance_angular != 0.0) 
+                        current_progress_angle = (pose_distance_angular * current_progress + angle_to_move) / pose_distance_angular;
                     current_progress = fmin(current_progress_angle, current_progress_distance);
                     if (current_progress > 1.0)
                     {
-                        ROS_WARN_STREAM("FTCLocalPlannerROS: FTC PLANNER: Progress > 1.0");
+                        ROS_WARN_STREAM("FTCLocalPlannerROS: FTC PLANNER: Progress > 1.0 dist " << current_progress_distance << "ang " << current_progress_angle);
                         //                    current_progress = 1.0;
                     }
                     distance_to_move = 0;
