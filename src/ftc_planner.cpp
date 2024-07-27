@@ -55,7 +55,7 @@ namespace ftc_local_planner
         config = c;
 
         // just to be sure
-        current_movement_speed = config.speed_fast;
+        //current_movement_speed = config.speed_slow;
 
         // set recovery behavior
         failure_detector_.setBufferLength(std::round(config.oscillation_recovery_min_duration * 10));
@@ -384,11 +384,10 @@ namespace ftc_local_planner
         case FOLLOWING:
         {
             double speed = 0.0;
+            double straight_dist = distanceLookahead();
             if(config.speed_slow > 0.0)
             {
                 // Normal planner operation
-                double straight_dist = distanceLookahead();
-                
                 if (straight_dist >= config.speed_fast_threshold)
                 {
                     speed = config.speed_fast;
@@ -401,6 +400,12 @@ namespace ftc_local_planner
             else
             {
                 speed = velocityLookahead();
+            }
+
+            if (straight_dist >= config.speed_fast_threshold) {
+                ang_pid_scale = config.speed_fast_ang_pid_scale;
+            } else {
+                ang_pid_scale = 1.0;
             }
 
             if (speed > current_movement_speed)
@@ -616,6 +621,7 @@ namespace ftc_local_planner
 
         // Only apply lat PID while FOLLOWING
         if (current_state == FOLLOWING) {
+            ang_speed *= ang_pid_scale;
             ang_speed += lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat;
         }
 
