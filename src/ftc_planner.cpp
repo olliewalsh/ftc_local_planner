@@ -427,7 +427,7 @@ namespace ftc_local_planner
             double angle_to_move = dt * config.speed_angular * (M_PI / 180.0);
 
             Eigen::Affine3d nextPose, currentPose;
-            while ((angle_to_move > 0 || distance_to_move > 0) && current_index < global_plan.size() - 2)
+            while (angle_to_move > 0 && distance_to_move > 0 && current_index < global_plan.size() - 2)
             {
 
                 tf2::fromMsg(global_plan[current_index].pose, currentPose);
@@ -450,8 +450,8 @@ namespace ftc_local_planner
                 double remaining_distance_to_next_pose = pose_distance * (1.0 - current_progress);
                 double remaining_angular_distance_to_next_pose = pose_distance_angular * (1.0 - current_progress);
 
-                if ((remaining_distance_to_next_pose == 0 || remaining_distance_to_next_pose < distance_to_move) &&
-                    (remaining_angular_distance_to_next_pose == 0 || remaining_angular_distance_to_next_pose < angle_to_move))
+                if (remaining_distance_to_next_pose < distance_to_move &&
+                    remaining_angular_distance_to_next_pose < angle_to_move)
                 {
                     // we need to move further than the remaining distance_to_move. Skip to the next point and decrease distance_to_move.
                     current_progress = 0.0;
@@ -462,12 +462,11 @@ namespace ftc_local_planner
                 else
                 {
                     // we cannot reach the next point yet, so we update the percentage
-                    double current_progress_distance = 1.0;
-                    if (pose_distance != 0.0) 
-                        current_progress_distance = (pose_distance * current_progress + distance_to_move) / pose_distance;
-                    double current_progress_angle = 1.0;
-                    if (pose_distance_angular != 0.0) 
-                        current_progress_angle = (pose_distance_angular * current_progress + angle_to_move) / pose_distance_angular;
+                    double current_progress_distance =
+                        (pose_distance * current_progress + distance_to_move) / pose_distance;
+                    double current_progress_angle =
+                        (pose_distance_angular * current_progress + angle_to_move) / pose_distance_angular;
+
                     current_progress = fmin(current_progress_angle, current_progress_distance);
                     if (current_progress > 1.0)
                     {
