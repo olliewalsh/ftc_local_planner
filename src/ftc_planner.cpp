@@ -400,6 +400,7 @@ namespace ftc_local_planner
             else
             {
                 speed = velocityLookahead();
+                if(speed < 0.1) speed = 0.1;
             }
 
             if (straight_dist >= config.speed_fast_threshold) {
