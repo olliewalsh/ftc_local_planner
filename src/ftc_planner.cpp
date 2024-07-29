@@ -360,8 +360,8 @@ namespace ftc_local_planner
 
                 //calculate max speed with acceleration from previous step (actually decel but going backwards)
                 max_speed = sqrt((max_speed * max_speed) + (2 * config.acceleration * distances[i]));
-                if(config.max_wheel_speed != 0 && config.wheel_distance_m != 0) {
-                    max_speed = std::min(max_speed, std::max(0.0, config.max_wheel_speed - 0.5*config.wheel_distance_m*rotations[i]));
+                if(config.wheel_distance_m != 0) {
+                    max_speed = std::min(max_speed, std::max(0.0, config.speed_fast - 0.5*config.wheel_distance_m*rotations[i]));
                 }
                 if(max_speed > config.speed_fast)
                     max_speed = config.speed_fast;
@@ -530,6 +530,13 @@ namespace ftc_local_planner
             return;
         }
 
+        if (lin_speed < 0)
+        {
+            // Going backwards, flip error
+            lat_error *= -1.0;
+            // TODO: Need this too? Don't think so: lon_error *= -1.0;
+        }
+
         i_lon_error += lon_error * dt;
         i_lat_error += lat_error * dt;
         i_angle_error += angle_error * dt;
@@ -579,41 +586,6 @@ namespace ftc_local_planner
         last_lon_error = lon_error;
         last_angle_error = angle_error;
 
-        // Only allow linear movement while FOLLOWING or WAITING_FOR_GOAL_APPROACH
-        if (current_state == FOLLOWING || current_state == WAITING_FOR_GOAL_APPROACH)
-        {
-            if (config.lon_pid_speed_delta) {
-                lin_speed += lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
-            }
-            else {
-                lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
-            }
-            if (lin_speed < 0 && config.forward_only)
-            {
-                lin_speed = 0;
-            }
-            else
-            {
-                if (lin_speed > config.max_cmd_vel_speed)
-                {
-                    lin_speed = config.max_cmd_vel_speed;
-                }
-                else if (lin_speed < -config.max_cmd_vel_speed)
-                {
-                    lin_speed = -config.max_cmd_vel_speed;
-                }
-
-                if (lin_speed < 0)
-                {
-                    lat_error *= -1.0;
-                }
-            }
-            cmd_vel.twist.linear.x = lin_speed;
-        }
-        else
-        {
-            cmd_vel.twist.linear.x = 0.0;
-        }
 
         double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang;
         if (current_state == PRE_ROTATE || current_state == POST_ROTATE)
@@ -634,15 +606,49 @@ namespace ftc_local_planner
             ang_speed = -config.max_cmd_vel_ang;
         }
 
-        cmd_vel.twist.angular.z = ang_speed;
-
         if (current_state == PRE_ROTATE || current_state == POST_ROTATE) {
             // check if robot oscillates
             bool is_oscillating = checkOscillation(cmd_vel);
             if (is_oscillating)
             {
-                cmd_vel.twist.angular.z = 0;
+                ang_speed = 0;
             }
+        }
+        cmd_vel.twist.angular.z = ang_speed;
+
+        // Only allow linear movement while FOLLOWING or WAITING_FOR_GOAL_APPROACH
+        if (current_state == FOLLOWING || current_state == WAITING_FOR_GOAL_APPROACH)
+        {
+            if (config.lon_pid_speed_delta) {
+                lin_speed += lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+            }
+            else {
+                lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+            }
+            if (lin_speed < 0 && config.forward_only)
+            {
+                lin_speed = 0;
+            }
+            else
+            {
+                double max_speed = config.max_cmd_vel_speed;
+                if(config.wheel_distance_m != 0) {
+                    max_speed = std::min(max_speed, std::max(0.1, max_speed - 0.5*config.wheel_distance_m*abs(ang_speed)));
+                }
+                if (lin_speed > max_speed)
+                {
+                    lin_speed = max_speed;
+                }
+                else if (lin_speed < -max_speed)
+                {
+                    lin_speed = -max_speed;
+                }
+            }
+            cmd_vel.twist.linear.x = lin_speed;
+        }
+        else
+        {
+            cmd_vel.twist.linear.x = 0.0;
         }
 
         if (config.debug_pid)
