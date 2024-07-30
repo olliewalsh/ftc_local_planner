@@ -360,9 +360,6 @@ namespace ftc_local_planner
 
                 //calculate max speed with acceleration from previous step (actually decel but going backwards)
                 max_speed = sqrt((max_speed * max_speed) + (2 * config.acceleration * distances[i]));
-                if(config.wheel_distance_m != 0) {
-                    max_speed = std::min(max_speed, std::max(0.0, config.speed_fast - 0.5*config.wheel_distance_m*rotations[i]));
-                }
                 if(max_speed > config.speed_fast)
                     max_speed = config.speed_fast;
                 if(speed < max_speed)
@@ -401,12 +398,6 @@ namespace ftc_local_planner
             {
                 speed = velocityLookahead();
                 if(speed < 0.1) speed = 0.1;
-            }
-
-            if (straight_dist >= config.speed_fast_threshold) {
-                ang_pid_scale = config.speed_fast_ang_pid_scale;
-            } else {
-                ang_pid_scale = 1.0;
             }
 
             if (speed > current_movement_speed)
@@ -593,7 +584,6 @@ namespace ftc_local_planner
 
         // Only apply lat PID while FOLLOWING
         if (current_state == FOLLOWING) {
-            ang_speed *= ang_pid_scale;
             ang_speed += lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat;
         }
 
@@ -632,9 +622,6 @@ namespace ftc_local_planner
             else
             {
                 double max_speed = config.max_cmd_vel_speed;
-                if(config.wheel_distance_m != 0) {
-                    max_speed = std::min(max_speed, std::max(0.1, max_speed - 0.5*config.wheel_distance_m*abs(ang_speed)));
-                }
                 if (lin_speed > max_speed)
                 {
                     lin_speed = max_speed;
