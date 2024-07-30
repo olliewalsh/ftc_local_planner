@@ -75,7 +75,6 @@ namespace ftc_local_planner
         double i_lat_error = 0.0;
         double i_angle_error = 0.0;
         ros::Time last_time;
-        double ang_pid_scale = 1.0;
 
         /**
          * Speed ramp for acceleration and deceleration
