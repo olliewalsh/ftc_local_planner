@@ -19,6 +19,7 @@ float32 kd_ang_set
 float32 lon_err
 float32 lat_err
 float32 ang_err
+float32 real_ang_err
 
 # speeds
 float32 ang_speed
