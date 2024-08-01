@@ -37,6 +37,7 @@ namespace ftc_local_planner
         if (config.debug_pid)
         {
             pubPid = private_nh.advertise<ftc_local_planner::PID>("debug_pid", 1, true);
+            pubCp = private_nh.advertise<ftc_local_planner::CP>("debug_cp", 1, true);
         }
 
         // Recovery behavior initialization
@@ -397,7 +398,7 @@ namespace ftc_local_planner
             else
             {
                 speed = velocityLookahead();
-                if(speed < 0.1) speed = 0.1;
+                if(speed < 0.01) speed = 0.01;
             }
 
             if (speed > current_movement_speed)
@@ -502,6 +503,17 @@ namespace ftc_local_planner
             viz.pose = tf2::toMsg(current_control_point);
             global_point_pub.publish(viz);
         }
+
+        if (config.debug_pid)
+        {
+            ftc_local_planner::CP debugCpMsg;
+
+            debugCpMsg.stamp = ros::Time::now();
+            debugCpMsg.movement_speed = current_movement_speed;
+            debugCpMsg.progress = current_progress;
+            pubCp.publish(debugCpMsg);
+        }
+
         auto map_to_base = tf_buffer->lookupTransform("base_link", "map", ros::Time(), ros::Duration(1.0));
         tf2::doTransform(current_control_point, local_control_point, map_to_base);
 
@@ -526,6 +538,11 @@ namespace ftc_local_planner
             // Going backwards, flip error
             lat_error *= -1.0;
             // TODO: Need this too? Don't think so: lon_error *= -1.0;
+        }
+
+        auto real_angle_error = angle_error;
+        if (config.ang_error_scale) {
+            angle_error *= config.ang_error_scale_factor / (config.ang_error_scale_factor + abs(lin_speed));
         }
 
         i_lon_error += lon_error * dt;
@@ -642,6 +659,8 @@ namespace ftc_local_planner
         {
             ftc_local_planner::PID debugPidMsg;
 
+            debugPidMsg.stamp = ros::Time::now();
+
             // proportional
             debugPidMsg.kp_lat_set = lat_error * config.kp_lat;
             debugPidMsg.kp_lon_set = lon_error * config.kp_lon;
@@ -661,6 +680,7 @@ namespace ftc_local_planner
             debugPidMsg.lon_err = lon_error;
             debugPidMsg.lat_err = lat_error;
             debugPidMsg.ang_err = angle_error;
+            debugPidMsg.real_ang_err = real_angle_error;
 
             // speeds
             debugPidMsg.ang_speed = cmd_vel.twist.angular.z;

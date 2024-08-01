@@ -13,6 +13,7 @@
 #include <dynamic_reconfigure/server.h>
 #include <ftc_local_planner/FTCPlannerConfig.h>
 #include <ftc_local_planner/PID.h>
+#include <ftc_local_planner/CP.h>
 #include <nav_core/base_local_planner.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -91,7 +92,7 @@ namespace ftc_local_planner
         /**
          * Private members
          */
-        ros::Publisher pubPid;
+        ros::Publisher pubPid, pubCp;
         FailureDetector failure_detector_; //!< Detect if the robot got stucked
         ros::Time time_last_oscillation_;  //!< Store at which time stamp the last oscillation was detected
         bool oscillation_detected_ = false;
