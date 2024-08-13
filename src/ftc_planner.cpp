@@ -360,7 +360,7 @@ namespace ftc_local_planner
                     speed = distances[i]/time_to_rotate;
 
                 //calculate max speed with acceleration from previous step (actually decel but going backwards)
-                max_speed = sqrt((max_speed * max_speed) + (2 * config.acceleration * distances[i]));
+                max_speed = sqrt((max_speed * max_speed) + (2 * config.acceleration * distances[i])) * config.velocity_lookahead_scale;
                 if(max_speed > config.speed_fast)
                     max_speed = config.speed_fast;
                 if(speed < max_speed)
