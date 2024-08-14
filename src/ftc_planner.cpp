@@ -72,7 +72,7 @@ namespace ftc_local_planner
         current_progress = 0.0;
 
         last_time = ros::Time::now();
-        current_movement_speed = config.speed_fast;
+        current_movement_speed = speed_limit = config.max_cmd_vel_speed;
 
         lat_error = 0.0;
         lon_error = 0.0;
@@ -343,14 +343,8 @@ namespace ftc_local_planner
                 break;
         }
 
-        double max_speed = config.speed_fast;
         // Back-off if struggling to keep up
-        if (config.velocity_lookahead_ki_lon != 0) {
-            max_speed = std::min(config.speed_slow, config.max_cmd_vel_speed - config.velocity_lookahead_ki_lon * i_lon_error);
-        }
-        else if (local_control_point.translation().norm() > config.max_follow_distance/2.0){
-            max_speed = config.speed_slow;
-        }
+        double max_speed = speed_limit;
         if(i >= global_plan.size())
         {
             max_speed = 0.0; //if we are approaching end of the path finish with zero speed
@@ -367,14 +361,14 @@ namespace ftc_local_planner
                 //calculate max speed to allow time for rotations
                 double angle = rotations[i] * (180.0 / M_PI);
                 double time_to_rotate = angle / config.speed_angular;
-                double speed = config.speed_fast;
+                double speed = speed_limit;
                 if(time_to_rotate > 0.0)
                     speed = distances[i]/time_to_rotate;
 
                 //calculate max speed with acceleration from previous step (actually decel but going backwards)
                 max_speed = sqrt((max_speed * max_speed) + (2 * config.acceleration * distances[i])) * config.velocity_lookahead_scale;
-                if(max_speed > config.speed_fast)
-                    max_speed = config.speed_fast;
+                if(max_speed > speed_limit)
+                    max_speed = speed_limit;
                 if(speed < max_speed)
                     max_speed = speed;                 
             }
@@ -605,7 +599,10 @@ namespace ftc_local_planner
         last_lat_error = lat_error;
         last_lon_error = lon_error;
         last_angle_error = angle_error;
-
+        speed_limit = std::min(config.max_cmd_vel_speed, std::max(
+            0.0,
+            config.max_cmd_vel_speed - (lon_error * config.kp_lim + i_lon_error * config.ki_lim + d_lon * config.kd_lim)
+        ));
 
         double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang;
         if (current_state == PRE_ROTATE || current_state == POST_ROTATE)
@@ -676,16 +673,19 @@ namespace ftc_local_planner
             // proportional
             debugPidMsg.kp_lat_set = lat_error * config.kp_lat;
             debugPidMsg.kp_lon_set = lon_error * config.kp_lon;
+            debugPidMsg.kp_lim_set = lon_error * config.kp_lim;
             debugPidMsg.kp_ang_set = angle_error * config.kp_ang;
 
             // integral
             debugPidMsg.ki_lat_set = i_lat_error * config.ki_lat;
             debugPidMsg.ki_lon_set = i_lon_error * config.ki_lon;
+            debugPidMsg.ki_lim_set = i_lon_error * config.ki_lim;
             debugPidMsg.ki_ang_set = i_angle_error * config.ki_ang;
 
             // diff
             debugPidMsg.kd_lat_set = d_lat * config.kd_lat;
             debugPidMsg.kd_lon_set = d_lon * config.kd_lon;
+            debugPidMsg.kd_lim_set = d_lon * config.kd_lim;
             debugPidMsg.kd_ang_set = d_angle * config.kd_ang;
 
             // errors
@@ -697,6 +697,7 @@ namespace ftc_local_planner
             // speeds
             debugPidMsg.ang_speed = cmd_vel.twist.angular.z;
             debugPidMsg.lin_speed = cmd_vel.twist.linear.x;
+            debugPidMsg.speed_limit = speed_limit;
 
             pubPid.publish(debugPidMsg);
         }
