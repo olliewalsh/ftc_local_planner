@@ -345,7 +345,10 @@ namespace ftc_local_planner
 
         double max_speed = config.speed_fast;
         // Back-off if struggling to keep up
-        if (local_control_point.translation().norm() > config.max_follow_distance/2.0){
+        if (config.velocity_lookahead_ki_lon != 0) {
+            max_speed = std::min(config.speed_slow, config.max_cmd_vel_speed - config.velocity_lookahead_ki_lon * i_lon_error);
+        }
+        else if (local_control_point.translation().norm() > config.max_follow_distance/2.0){
             max_speed = config.speed_slow;
         }
         if(i >= global_plan.size())
