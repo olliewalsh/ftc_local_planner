@@ -323,15 +323,20 @@ namespace ftc_local_planner
         Eigen::Affine3d last_point = current_control_point;
         Eigen::Quaternion<double> last_rot(current_control_point.linear());
         uint32_t i = 0;
+        double dist = 0;
         for (i = current_index + 1; i < global_plan.size(); i++)
         {
             Eigen::Affine3d next_point;
             tf2::fromMsg(global_plan[i].pose, next_point);
-            double dist = abs((next_point.translation() - last_point.translation()).norm());
+            dist += abs((next_point.translation() - last_point.translation()).norm());
+            if (dist < config.velocity_lookahead_min_step) {
+                continue;
+            }
             distances.push_back(dist);
             Eigen::Quaternion<double> next_rot(next_point.linear());
             rotations.push_back(abs(next_rot.angularDistance(last_rot)));
             total_dist += dist;
+            dist = 0;
             last_point = next_point;
             last_rot = next_rot;
             if(total_dist >= decelDist)
