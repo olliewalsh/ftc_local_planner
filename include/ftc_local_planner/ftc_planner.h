@@ -75,6 +75,7 @@ namespace ftc_local_planner
         double i_lon_error = 0.0;
         double i_lat_error = 0.0;
         double i_angle_error = 0.0;
+        double speed_limit = 0.0;
         ros::Time last_time;
 
         /**
