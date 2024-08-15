@@ -636,7 +636,17 @@ namespace ftc_local_planner
         if (current_state == FOLLOWING || current_state == WAITING_FOR_GOAL_APPROACH)
         {
             if (config.lon_pid_speed_delta) {
-                lin_speed += lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+                double d_lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+                double max_acceleration = dt * config.max_cmd_vel_acceleration;
+                if (d_lin_speed >= 0) {
+                    if (d_lin_speed > max_acceleration) {
+                        d_lin_speed = max_acceleration;
+                    }
+                }
+                else if (d_lin_speed < -max_acceleration) {
+                    d_lin_speed = -max_acceleration;
+                }
+                lin_speed += d_lin_speed;
             }
             else {
                 lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
