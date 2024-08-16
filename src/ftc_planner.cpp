@@ -72,7 +72,8 @@ namespace ftc_local_planner
         current_progress = 0.0;
 
         last_time = ros::Time::now();
-        current_movement_speed = speed_limit = config.max_cmd_vel_speed;
+        current_movement_speed = 0;
+        speed_limit = config.max_cmd_vel_speed;
 
         lat_error = 0.0;
         lon_error = 0.0;
@@ -643,9 +644,9 @@ namespace ftc_local_planner
                         d_lin_speed = max_acceleration;
                     }
                 }
-                else if (d_lin_speed < -max_acceleration) {
-                    d_lin_speed = -max_acceleration;
-                }
+                // else if (d_lin_speed < -max_acceleration) {
+                //     d_lin_speed = -max_acceleration;
+                // }
                 lin_speed += d_lin_speed;
             }
             else {
