@@ -361,6 +361,9 @@ namespace ftc_local_planner
             {
                 //calculate max speed to allow time for rotations
                 double angle = rotations[i] * (180.0 / M_PI);
+                if (angle < config.velocity_lookahead_min_angle) {
+                    angle = 0.0;
+                }
                 double time_to_rotate = angle / config.speed_angular;
                 double speed = speed_limit;
                 if(time_to_rotate > 0.0)
@@ -637,6 +640,8 @@ namespace ftc_local_planner
         if (current_state == FOLLOWING || current_state == WAITING_FOR_GOAL_APPROACH)
         {
             if (config.lon_pid_speed_delta) {
+                // TODO: Maybe?
+                // double d_lin_speed = (current_movement_speed - lin_speed) + lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
                 double d_lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
                 double max_acceleration = dt * config.max_cmd_vel_acceleration;
                 if (d_lin_speed >= 0) {
