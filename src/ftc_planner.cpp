@@ -350,13 +350,13 @@ namespace ftc_local_planner
         {
             max_speed = 0.0; //if we are approaching end of the path finish with zero speed
         }
-        if(distances.empty()) 
+        if(distances.empty())
         {
             return 0;
         }
         else{
             //now go back through the points to calculate max permissible speed
-            
+
             for(int32_t i = distances.size()-1;i>=0;i--)
             {
                 //calculate max speed to allow time for rotations
@@ -374,7 +374,7 @@ namespace ftc_local_planner
                 if(max_speed > speed_limit)
                     max_speed = speed_limit;
                 if(speed < max_speed)
-                    max_speed = speed;                 
+                    max_speed = speed;
             }
         }
 
@@ -604,7 +604,7 @@ namespace ftc_local_planner
         last_lon_error = lon_error;
         last_angle_error = angle_error;
         speed_limit = std::min(config.max_cmd_vel_speed, std::max(
-            0.0,
+            config.speed_limit_min,
             config.max_cmd_vel_speed - (lon_error * config.kp_lim + i_lon_error * config.ki_lim + d_lon * config.kd_lim)
         ));
 
