@@ -43,7 +43,14 @@ namespace ftc_local_planner
         // Recovery behavior initialization
         failure_detector_.setBufferLength(std::round(config.oscillation_recovery_min_duration * 10));
 
+        status_sub = private_nh.subscribe<mower_msgs::Status>("/mower/status", 0, &FTCPlanner::statusReceived, this, ros::TransportHints().tcpNoDelay(true));
+
         ROS_INFO("FTCLocalPlannerROS: Version 2 Init.");
+    }
+
+    void FTCPlanner::statusReceived(const mower_msgs::Status::ConstPtr &msg)
+    {
+        last_status = *msg;
     }
 
     void FTCPlanner::reconfigureCB(FTCPlannerConfig &c, uint32_t level)
@@ -603,9 +610,13 @@ namespace ftc_local_planner
         last_lat_error = lat_error;
         last_lon_error = lon_error;
         last_angle_error = angle_error;
+        double mow_current_error = std::max(0.0, last_status.mow_esc_status.current - config.max_mow_motor_current);
         speed_limit = std::min(config.max_cmd_vel_speed, std::max(
             config.speed_limit_min,
-            config.max_cmd_vel_speed - (lon_error * config.kp_lim + i_lon_error * config.ki_lim + d_lon * config.kd_lim)
+            std::min(
+                config.max_cmd_vel_speed - (lon_error * config.kp_lim + i_lon_error * config.ki_lim + d_lon * config.kd_lim),
+                config.max_cmd_vel_speed - (mow_current_error * config.kp_mow_current_lim)
+            )
         ));
 
         double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang;
