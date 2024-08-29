@@ -23,6 +23,7 @@
 #include "tf2_eigen/tf2_eigen.h"
 #include <mbf_costmap_core/costmap_controller.h>
 #include <visualization_msgs/Marker.h>
+#include "mower_msgs/Status.h"
 
 namespace ftc_local_planner
 {
@@ -53,13 +54,15 @@ namespace ftc_local_planner
 
         tf2_ros::Buffer *tf_buffer;
         costmap_2d::Costmap2DROS *costmap;
-        costmap_2d::Costmap2D* costmap_map_;   
+        costmap_2d::Costmap2D* costmap_map_;
 
         std::vector<geometry_msgs::PoseStamped> global_plan;
         ros::Publisher global_point_pub;
         ros::Publisher global_plan_pub;
         ros::Publisher progress_pub;
         ros::Publisher obstacle_marker_pub;
+
+        ros::Subscriber status_sub;
 
         FTCPlannerConfig config;
 
@@ -78,6 +81,7 @@ namespace ftc_local_planner
         double speed_limit = 0.0;
         ros::Time last_time;
 
+        mower_msgs::Status last_status;
         /**
          * Speed ramp for acceleration and deceleration
          */
@@ -139,6 +143,8 @@ namespace ftc_local_planner
         }
 
         void reconfigureCB(FTCPlannerConfig &config, uint32_t level);
+
+        void statusReceived(const mower_msgs::Status::ConstPtr &msg);
 
     public:
         FTCPlanner() : current_state_(INIT), current_state(current_state_) {};
