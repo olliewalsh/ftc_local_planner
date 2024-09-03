@@ -74,7 +74,7 @@ namespace ftc_local_planner
         set_planner_state(PRE_ROTATE);
         is_crashed = false;
 
-        global_plan = plan;
+        global_plan.clear();
         current_index = 0;
         current_progress = 0.0;
 
@@ -92,14 +92,35 @@ namespace ftc_local_planner
 
         nav_msgs::Path path;
 
-        if (global_plan.size() > 2)
+        if (plan.size() > 2)
         {
+            // skip ahead 5cm from first point to account for GPS variance
+            double trimmed = 0.0;
+            Eigen::Affine3d first_point;
+            tf2::fromMsg(plan.front().pose, first_point);
+            for(auto& it: plan) {
+                if(trimmed > 0.05) {
+                    global_plan.push_back(it);
+                } else {
+                    Eigen::Affine3d next_point;
+                    tf2::fromMsg(it.pose, next_point);
+                    trimmed = abs((next_point.translation() - first_point.translation()).norm());
+                    if(trimmed > 0.05) {
+                        global_plan.push_back(it);
+                    }
+                }
+            }
+            if(global_plan.size() < 3) {
+                ROS_WARN_STREAM("FTCLocalPlannerROS: Global plan was too short. Need a minimum 5cm plus 3 poses - Cancelling.");
+                set_planner_state(FINISHED);
+                return true;
+            }
             // duplicate last point
             global_plan.push_back(global_plan.back());
             // give second from last point last oriantation as the point before that
             global_plan[global_plan.size() - 2].pose.orientation = global_plan[global_plan.size() - 3].pose.orientation;
             path.header = plan.front().header;
-            path.poses = plan;
+            path.poses = global_plan;
         }
         else
         {
