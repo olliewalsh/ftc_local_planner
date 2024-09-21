@@ -92,7 +92,7 @@ namespace ftc_local_planner
          */
         uint32_t current_index;
         double current_progress;
-        Eigen::Affine3d local_control_point;
+        Eigen::Affine3d last_local_control_point, local_control_point;
 
         /**
          * Private members
