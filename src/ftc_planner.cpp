@@ -624,7 +624,20 @@ namespace ftc_local_planner
             ang_speed = angle_error * config.kp_ang_rotate + i_angle_error * config.ki_ang_rotate + d_angle * config.kd_ang_rotate;
 
         // Only apply lat PID while FOLLOWING
-        if (current_state == FOLLOWING) {
+        if ((current_state == FOLLOWING) || (current_state == WAITING_FOR_GOAL_APPROACH)) {
+            // reduce angular error gain if there is a large lateral error
+            double ang_gain_factor = 1.0;
+            if(config.lateral_priority_distance > 0.01)
+            {
+                if(abs(lat_error) >= config.lateral_priority_distance)
+                    ang_gain_factor = 0;
+                else
+                    ang_gain_factor = (config.lateral_priority_distance - abs(lat_error))/config.lateral_priority_distance;
+
+                if(ang_gain_factor < 0.1)
+                    ang_gain_factor = 0.1;
+            }
+            ang_speed *= ang_gain_factor;
             ang_speed += lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat;
         }
 
