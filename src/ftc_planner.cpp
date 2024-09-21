@@ -538,6 +538,7 @@ namespace ftc_local_planner
         lon_error = local_control_point.translation().x();
         lon_error -= config.follow_distance;
         angle_error = local_control_point.rotation().eulerAngles(0, 1, 2).z();
+
     }
 
     void FTCPlanner::calculate_velocity_commands(double dt, geometry_msgs::TwistStamped &cmd_vel)
@@ -603,6 +604,15 @@ namespace ftc_local_planner
             }
         }
 
+        double d_input_lon = local_control_point.translation().x() - last_local_control_point.translation().x();
+        double d_input_lat = local_control_point.translation().y() - last_local_control_point.translation().y();
+        double d_input_angular = local_control_point.rotation().eulerAngles(0, 1, 2).z() - last_local_control_point.rotation().eulerAngles(0, 1, 2).z();
+        last_local_control_point = local_control_point;
+
+        double d_lat_input = d_input_lat / dt;
+        double d_lon_input = d_input_lon / dt;
+        double d_angle_input = d_input_angular / dt;
+
         double d_lat = (lat_error - last_lat_error) / dt;
         double d_lon = (lon_error - last_lon_error) / dt;
         double d_angle = (angle_error - last_angle_error) / dt;
@@ -619,7 +629,7 @@ namespace ftc_local_planner
             )
         ));
 
-        double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang;
+        double ang_speed = angle_error * config.kp_ang + i_angle_error * config.ki_ang + d_angle * config.kd_ang + d_angle_input * config.kd_ang_input;
         if (current_state == PRE_ROTATE || current_state == POST_ROTATE)
             ang_speed = angle_error * config.kp_ang_rotate + i_angle_error * config.ki_ang_rotate + d_angle * config.kd_ang_rotate;
 
@@ -638,7 +648,7 @@ namespace ftc_local_planner
                     ang_gain_factor = 0.1;
             }
             ang_speed *= ang_gain_factor;
-            ang_speed += lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat;
+            ang_speed += lat_error * config.kp_lat + i_lat_error * config.ki_lat + d_lat * config.kd_lat + d_lat_input * config.kd_lat_input;
         }
 
         if (ang_speed > config.max_cmd_vel_ang)
@@ -666,7 +676,7 @@ namespace ftc_local_planner
             if (config.lon_pid_speed_delta) {
                 // TODO: Maybe?
                 // double d_lin_speed = (current_movement_speed - lin_speed) + lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
-                double d_lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+                double d_lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon + d_lon_input * config.kd_lon_input;
                 double max_acceleration = dt * config.max_cmd_vel_acceleration;
                 if (d_lin_speed >= 0) {
                     if (d_lin_speed > max_acceleration) {
@@ -679,7 +689,7 @@ namespace ftc_local_planner
                 lin_speed += d_lin_speed;
             }
             else {
-                lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon;
+                lin_speed = lon_error * config.kp_lon + i_lon_error * config.ki_lon + d_lon * config.kd_lon + d_lon_input * config.kd_lon_input;
             }
             if (lin_speed < 0 && config.forward_only)
             {
@@ -727,6 +737,11 @@ namespace ftc_local_planner
             debugPidMsg.kd_lon_set = d_lon * config.kd_lon;
             debugPidMsg.kd_lim_set = d_lon * config.kd_lim;
             debugPidMsg.kd_ang_set = d_angle * config.kd_ang;
+
+            // diff input
+            debugPidMsg.kd_lat_input_set = d_lat_input * config.kd_lat_input;
+            debugPidMsg.kd_lon_input_set = d_lon_input * config.kd_lon_input;
+            debugPidMsg.kd_ang_input_set = d_angle_input * config.kd_ang_input;
 
             // errors
             debugPidMsg.lon_err = lon_error;

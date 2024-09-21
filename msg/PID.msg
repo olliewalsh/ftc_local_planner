@@ -18,6 +18,11 @@ float32 kd_lim_set
 float32 kd_lat_set
 float32 kd_ang_set
 
+# D input set point
+float32 kd_lon_input_set
+float32 kd_lat_input_set
+float32 kd_ang_input_set
+
 # errors
 float32 lon_err
 float32 lat_err
