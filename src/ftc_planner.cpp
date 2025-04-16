@@ -394,7 +394,27 @@ namespace ftc_local_planner
         switch (current_state)
         {
         case PRE_ROTATE:
-            tf2::fromMsg(global_plan[0].pose, current_control_point);
+            {
+                auto trim_threshold = config.initial_path_trim;
+                if (trim_threshold > 0) {
+                    // Trim initial points as it can contain a hairpin
+                    Eigen::Affine3d first_point;
+                    tf2::fromMsg(global_plan[0].pose, first_point);
+                    Eigen::Affine3d current_point;
+
+                    for (uint32_t i = current_index + 1; i < global_plan.size()-2; i++)
+                    {
+                        tf2::fromMsg(global_plan[i].pose, current_point);
+
+                        auto distance = (current_point.translation() - first_point.translation()).norm();
+                        if(distance > trim_threshold) {
+                            break;
+                        }
+                        current_index = i;
+                    }
+                }
+            }
+            tf2::fromMsg(global_plan[current_index].pose, current_control_point);
             break;
         case FOLLOWING:
         {
