@@ -245,6 +245,23 @@ namespace ftc_local_planner
             if (abs(angle_error) * (180.0 / M_PI) < config.max_goal_angle_error)
             {
                 ROS_INFO_STREAM("FTCLocalPlannerROS: PRE_ROTATE finished. Starting following");
+                // Trim
+                if (config.forward_only) {
+                    // Skip initial points behind the mower as the robot position may have drifted slightly since path was generated
+                    auto map_to_base = tf_buffer->lookupTransform("base_link", "map", ros::Time(), ros::Duration(1.0));
+                    auto max_trim = std::min(size_t(config.max_path_trim), global_plan.size()-2);
+                    for (size_t i=0; i < max_trim; i++)
+                    {
+                        tf2::fromMsg(global_plan[current_index].pose, current_control_point);
+                        tf2::doTransform(current_control_point, local_control_point, map_to_base);
+                        if(local_control_point.translation().x() > config.min_first_point_distance) {
+                            // Control point is ahead of mower, proceed
+                            break;
+                        }
+                        ROS_WARN_STREAM("FTCLocalPlannerROS: Skipping initial point behind robot in global plan.");
+                        current_index++;
+                    }
+                }
                 set_planner_state(FOLLOWING);
                 return;
             }
@@ -395,26 +412,8 @@ namespace ftc_local_planner
         {
         case PRE_ROTATE:
             {
-                auto trim_threshold = config.initial_path_trim;
-                if (trim_threshold > 0) {
-                    // Trim initial points as it can contain a hairpin
-                    Eigen::Affine3d first_point;
-                    tf2::fromMsg(global_plan[0].pose, first_point);
-                    Eigen::Affine3d current_point;
-
-                    for (uint32_t i = current_index + 1; i < global_plan.size()-2; i++)
-                    {
-                        tf2::fromMsg(global_plan[i].pose, current_point);
-
-                        auto distance = (current_point.translation() - first_point.translation()).norm();
-                        if(distance > trim_threshold) {
-                            break;
-                        }
-                        current_index = i;
-                    }
-                }
+                tf2::fromMsg(global_plan[current_index].pose, current_control_point);
             }
-            tf2::fromMsg(global_plan[current_index].pose, current_control_point);
             break;
         case FOLLOWING:
         {
