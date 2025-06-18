@@ -640,12 +640,20 @@ namespace ftc_local_planner
         last_lat_error = lat_error;
         last_lon_error = lon_error;
         last_angle_error = angle_error;
-        double mow_current_error = std::max(0.0, last_status.mow_esc_status.current - config.max_mow_motor_current);
+        double mow_current_error = 0.0;
+        if (config.max_mow_motor_current) {
+            mow_current_error = std::max(0.0, last_status.mow_esc_status.current - config.max_mow_motor_current);
+        }
+        double mow_rpm_error = 0.0;
+        if (config.min_mow_motor_rpm > 0 && last_status.mow_esc_status.duty_cycle != 0.0) {
+            mow_rpm_error = std::max(0, config.min_mow_motor_rpm - std::abs(last_status.mow_esc_status.rpm))/1000.0;
+        }
         speed_limit = std::min(config.max_cmd_vel_speed, std::max(
             config.speed_limit_min,
             std::min(
                 config.max_cmd_vel_speed - (lon_error * config.kp_lim + i_lon_error * config.ki_lim + d_lon * config.kd_lim),
-                config.max_cmd_vel_speed - (mow_current_error * config.kp_mow_current_lim)
+                std::min(config.max_cmd_vel_speed - (mow_current_error * config.kp_mow_current_lim),
+                config.max_cmd_vel_speed - (mow_rpm_error * config.kp_mow_rpm_lim))
             )
         ));
 
