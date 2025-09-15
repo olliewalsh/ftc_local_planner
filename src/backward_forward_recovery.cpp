@@ -28,8 +28,8 @@ void BackwardForwardRecovery::initialize(std::string name, tf2_ros::Buffer* tf,
     ros::NodeHandle private_nh("~/" + name_);
     cmd_vel_pub_ = private_nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
 
-    private_nh.param("max_distance", max_distance_, 0.5);
-    private_nh.param("linear_vel", linear_vel_, 0.3);
+    private_nh.param("max_distance", max_distance_, 0.2);
+    private_nh.param("linear_vel", linear_vel_, 0.2);
     private_nh.param("check_frequency", check_frequency_, 10.0);
     int temp_threshold;
     private_nh.param("max_cost_threshold", temp_threshold, static_cast<int>(costmap_2d::INSCRIBED_INFLATED_OBSTACLE-10));
