@@ -58,7 +58,6 @@ void BackwardForwardRecovery::runBehavior()
 
   if (attemptMove(max_distance_/2.0, false)) {
     ROS_INFO("Successfully moved backwards");
-    return;
   }
 
   if (attemptMove(max_distance_, true)) {
@@ -82,6 +81,10 @@ bool BackwardForwardRecovery::attemptMove(double distance, bool forward)
   ros::Time start_time = ros::Time::now();
   while (moved_distance < distance && (ros::Time::now() - start_time) < timeout_)
   {
+
+    cmd_vel_pub_.publish(cmd_vel);
+    rate.sleep();
+
     geometry_msgs::PoseStamped current_pose;
     local_costmap_->getRobotPose(current_pose);
 
@@ -97,9 +100,6 @@ bool BackwardForwardRecovery::attemptMove(double distance, bool forward)
       cmd_vel_pub_.publish(cmd_vel);
       return false;
     }
-
-    cmd_vel_pub_.publish(cmd_vel);
-    rate.sleep();
   }
 
   cmd_vel.linear.x = 0;
